@@ -2,6 +2,9 @@ import numpy as np
 import networkx
 from itertools import combinations_with_replacement
 
+__doc__ = """
+Analyze the connectedness of an landscape of an arbitrary dimension.
+"""
 
 def connected_components(A, threshold):
     """
