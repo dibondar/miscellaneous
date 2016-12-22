@@ -85,11 +85,7 @@ class nnl_ode:
             M = np.array(M, copy=False)
             M *= -dt
 
-            print np.linalg.eigvals(M)
-
             self.y, rnorm = nnls(expm(M), self.y)
-
-            #print rnorm
 
             self.t += dt
 
@@ -115,16 +111,11 @@ if __name__=='__main__':
     #
     ################################################################################################
 
-    #np.random.seed(38490)
-
     # randomly generate test parameters
-    dump, pump = np.random.uniform(0, 1, 2)
-
-
+    dump, pump = np.random.uniform(0, 5, 2)
 
     # time grid
     t = np.linspace(0, 5, 100)
-    dt = t[1] - t[0]
 
     # Exact solutions
     p0 = (dump + pump * np.exp(-(dump + pump) * t)) / (dump + pump)
@@ -134,30 +125,15 @@ if __name__=='__main__':
     def M(t, dump, pump):
         return [[-pump, dump], [pump, -dump]]
 
-    solver = nnl_ode(M, M_args=(dump, dump)).set_initial_value([1., 0.])
+    solver = nnl_ode(M, M_args=(dump, pump)).set_initial_value([1., 0.])
 
     # numerically propagate
     p0_numeric, p1_numeric = np.array(
-        [solver.integrate(tau, dt=0.001) for tau in t]
+        [solver.integrate(tau, dt=0.1) for tau in t]
     ).T
 
-    print np.linalg.norm(
-        np.gradient(p0, dt) - (-pump * p0 + dump * p1),
-        np.inf
-    )
-    print np.linalg.norm(
-        np.gradient(p1, dt) - (pump * p0 - dump * p1),
-        np.inf
-    )
-
-    print np.linalg.norm(
-        np.gradient(p0_numeric, dt) - (-pump * p0_numeric + dump * p1_numeric),
-        np.inf
-    )
-    print np.linalg.norm(
-        np.gradient(p1_numeric, dt) - (pump * p0_numeric - dump * p1_numeric),
-        np.inf
-    )
+    print "\nNumerical error in p0 = %1.2e" % np.linalg.norm(p0 - p0_numeric)
+    print "Numerical error in p0 = %1.2e\n" % np.linalg.norm(p0 - p0_numeric)
 
     plt.subplot(121)
     plt.plot(t, p0, 'r', label='exact')
