@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import nnls
-from scipy.linalg import expm
+from scipy.linalg import expm, norm
 
 __doc__ = """
 Non-negative solver for a system of linear ordinary differential equations.
@@ -39,18 +39,15 @@ class nnl_ode:
         self.y = y
         return self
 
-    def integrate(self, t_final, dt=0.01):
+    def integrate(self, t_final, atol=0, rtol=1e-10):
         """
-        Integrate the system of equations with fixed step size dt assuming self.t and self.y set the initial value.
+        Adaptively integrate the system of equations assuming self.t and self.y set the initial value.
         :param t_final: the final time to be reached.
-        :param dt: step size
+        :param atol: the absolute tolerance parameter
+        :param rtol: the relative tolerance parameter
         :return: current value of y
         """
-        # get number of steps to be integarted over
-        n_steps = int(np.ceil((t_final - self.t) / dt))
-
-        # update the step size such that self.t + dt * n_steps = t_final
-        dt = ((t_final - self.t) / n_steps if n_steps else 0.)
+        assert t_final >= self.t, "Propagation backward in time is temporally not allowed"
 
         # Loop utill the final time moment is reached
         while self.t < t_final:
@@ -81,13 +78,42 @@ class nnl_ode:
             #   which can be solved by scipy.optimize.nnls ensuring the non-negativity constrain for y(t + dt).
             #
             #######################################################################################
-            M = self.M(self.t + 0.5 * dt, *self.M_args, **self.M_kwargs)
-            M = np.array(M, copy=False)
-            M *= -dt
 
-            self.y, rnorm = nnls(expm(M), self.y)
+            # Initial guess for the time-step
+            dt = 0.25 / norm(self.M(self.t, *self.M_args, **self.M_kwargs))
 
+            # time step must not take as above t_final
+            dt = min(dt, t_final - self.t)
+
+            # Loop until optimal value of dt is not found (adaptive step size integrator)
+            while True:
+                M = self.M(self.t + 0.5 * dt, *self.M_args, **self.M_kwargs)
+                M = np.array(M, copy=False)
+                M *= -dt
+
+                new_y, residual = nnls(expm(M), self.y)
+
+                # Adaptive step termination criterion
+                if np.allclose(residual, 0., rtol, atol):
+                    # residual is small it seems we got the solution
+
+                    # Additional check: If M is a transition rate matrix,
+                    # then the sum of y must be preserved
+                    if np.allclose(M.sum(axis=0), 0., rtol, atol):
+
+                        # exit only if sum( y(t+dt) ) = sum( y(t) )
+                        if np.allclose(sum(self.y), sum(new_y), rtol, atol):
+                            break
+                    else:
+                        # M is not a transition rate matrix, thus exist
+                        break
+
+                # half the time-step
+                dt *= 0.5
+
+            # the dt propagation is successfully completed
             self.t += dt
+            self.y = new_y
 
         return self.y
 
@@ -112,10 +138,12 @@ if __name__=='__main__':
     ################################################################################################
 
     # randomly generate test parameters
-    dump, pump = np.random.uniform(0, 5, 2)
+    #dump, pump = np.random.uniform(1, 10, 2)
+    dump = 1.
+    pump = 2000.
 
     # time grid
-    t = np.linspace(0, 5, 100)
+    t = np.linspace(0, 0.01, 100)
 
     # Exact solutions
     p0 = (dump + pump * np.exp(-(dump + pump) * t)) / (dump + pump)
@@ -123,28 +151,41 @@ if __name__=='__main__':
 
     # Numerical solutions
     def M(t, dump, pump):
-        return [[-pump, dump], [pump, -dump]]
+        return np.array([[-pump, dump], [pump, -dump]])
 
     solver = nnl_ode(M, M_args=(dump, pump)).set_initial_value([1., 0.])
 
-    # numerically propagate
+    # numerically propagate using nnl_ode
     p0_numeric, p1_numeric = np.array(
-        [solver.integrate(tau, dt=0.1) for tau in t]
+        [solver.integrate(tau) for tau in t]
     ).T
 
-    print "\nNumerical error in p0 = %1.2e" % np.linalg.norm(p0 - p0_numeric)
-    print "Numerical error in p0 = %1.2e\n" % np.linalg.norm(p0 - p0_numeric)
+    print "\nNumerical error in p0 = %1.2e" % norm(p0 - p0_numeric)
+    print "Numerical error in p1 = %1.2e\n" % norm(p1 - p1_numeric)
 
+    # numerically propagate using non-constrained ode solver
+    from scipy.integrate import odeint
+
+    p0_odeint, p1_odeint = odeint(
+        lambda y, t, dump, pump: M(t, dump, pump).dot(y),
+        [1., 0.],
+        t,
+        args=(dump, pump)
+    ).T
+
+    # Plot
     plt.subplot(121)
     plt.plot(t, p0, 'r', label='exact')
-    plt.plot(t, p0_numeric, 'b', label='numeric')
+    plt.plot(t, p0_numeric, 'b', label='nnl_ode')
+    plt.plot(t, p0_odeint, 'g', label='odeint')
     plt.xlabel('time')
     plt.ylabel('p0')
     plt.legend()
 
     plt.subplot(122)
     plt.plot(t, p1, 'r', label='exact')
-    plt.plot(t, p1_numeric, 'b', label='numeric')
+    plt.plot(t, p1_numeric, 'b', label='nnl_ode')
+    plt.plot(t, p1_odeint, 'g', label='odeint')
     plt.xlabel('time')
     plt.ylabel('p1')
     plt.legend()
