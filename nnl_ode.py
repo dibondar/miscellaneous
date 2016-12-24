@@ -150,7 +150,7 @@ if __name__=='__main__':
     # randomly generate test parameters
     dump, pump = np.random.uniform(5, 20, 2)
 
-    t = np.linspace(0., -1e-5, 100)
+    t = np.linspace(0., 1., 100)
 
     # Exact solutions
     p0 = (dump + pump * np.exp(-(dump + pump) * t)) / (dump + pump)
