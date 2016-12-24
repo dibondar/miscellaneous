@@ -42,19 +42,19 @@ class nnl_ode:
     def integrate(self, t_final, atol=0, rtol=1e-10):
         """
         Adaptively integrate the system of equations assuming self.t and self.y set the initial value.
-        :param t_final: the final time to be reached.
+        :param t_final: (scalar) the final time to be reached.
         :param atol: the absolute tolerance parameter
         :param rtol: the relative tolerance parameter
         :return: current value of y
         """
-        assert t_final >= self.t, "Propagation backward in time is not allowed."
-
         if not np.isscalar(t_final):
-            raise ValueError("t_final must be a number. If t_final is iterable consider using "
-                             "the list comprehension [integrate(t) for t in times]")
+            raise ValueError("t_final must be a scalar. If t_final is iterable consider using "
+                             "the list comprehension [integrate(t) for t in times].")
 
-        # Loop utill the final time moment is reached
-        while self.t < t_final:
+        sign_dt = np.sign(t_final - self.t)
+
+        # Loop util the final time moment is reached
+        while sign_dt * (t_final - self.t) > 0:
             #######################################################################################
             #
             #           Description of numerical methods
@@ -87,7 +87,7 @@ class nnl_ode:
             dt = 0.25 / norm(self.M(self.t, *self.M_args, **self.M_kwargs))
 
             # time step must not take as above t_final
-            dt = min(dt, t_final - self.t)
+            dt = sign_dt * min(dt, abs(t_final - self.t))
 
             # Loop until optimal value of dt is not found (adaptive step size integrator)
             while True:
@@ -114,7 +114,7 @@ class nnl_ode:
 
                 if np.allclose(dt, 0., rtol, atol):
                     # print waring if dt is very small
-                    print "Warning: adaptive time-step became very small." \
+                    print "Warning in nnl_ode: adaptive time-step became very small." \
                           "The numerical result may not be trustworthy."
                     break
                 else:
@@ -150,7 +150,7 @@ if __name__=='__main__':
     # randomly generate test parameters
     dump, pump = np.random.uniform(5, 20, 2)
 
-    t = np.linspace(0., 1, 100)
+    t = np.linspace(0., -1e-5, 100)
 
     # Exact solutions
     p0 = (dump + pump * np.exp(-(dump + pump) * t)) / (dump + pump)
