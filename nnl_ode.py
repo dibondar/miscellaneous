@@ -47,7 +47,11 @@ class nnl_ode:
         :param rtol: the relative tolerance parameter
         :return: current value of y
         """
-        assert t_final >= self.t, "Propagation backward in time is temporally not allowed"
+        assert t_final >= self.t, "Propagation backward in time is not allowed."
+
+        if not np.isscalar(t_final):
+            raise ValueError("t_final must be a number. If t_final is iterable consider using "
+                             "the list comprehension [integrate(t) for t in times]")
 
         # Loop utill the final time moment is reached
         while self.t < t_final:
@@ -108,8 +112,14 @@ class nnl_ode:
                         # M is not a transition rate matrix, thus exist
                         break
 
-                # half the time-step
-                dt *= 0.5
+                if np.allclose(dt, 0., rtol, atol):
+                    # print waring if dt is very small
+                    print "Warning: adaptive time-step became very small." \
+                          "The numerical result may not be trustworthy."
+                    break
+                else:
+                    # half the time-step
+                    dt *= 0.5
 
             # the dt propagation is successfully completed
             self.t += dt
@@ -138,12 +148,9 @@ if __name__=='__main__':
     ################################################################################################
 
     # randomly generate test parameters
-    #dump, pump = np.random.uniform(1, 10, 2)
-    dump = 1.
-    pump = 2000.
+    dump, pump = np.random.uniform(5, 20, 2)
 
-    # time grid
-    t = np.linspace(0, 0.01, 100)
+    t = np.linspace(0., 1, 100)
 
     # Exact solutions
     p0 = (dump + pump * np.exp(-(dump + pump) * t)) / (dump + pump)
@@ -163,21 +170,10 @@ if __name__=='__main__':
     print "\nNumerical error in p0 = %1.2e" % norm(p0 - p0_numeric)
     print "Numerical error in p1 = %1.2e\n" % norm(p1 - p1_numeric)
 
-    # numerically propagate using non-constrained ode solver
-    from scipy.integrate import odeint
-
-    p0_odeint, p1_odeint = odeint(
-        lambda y, t, dump, pump: M(t, dump, pump).dot(y),
-        [1., 0.],
-        t,
-        args=(dump, pump)
-    ).T
-
     # Plot
     plt.subplot(121)
     plt.plot(t, p0, 'r', label='exact')
     plt.plot(t, p0_numeric, 'b', label='nnl_ode')
-    plt.plot(t, p0_odeint, 'g', label='odeint')
     plt.xlabel('time')
     plt.ylabel('p0')
     plt.legend()
@@ -185,7 +181,6 @@ if __name__=='__main__':
     plt.subplot(122)
     plt.plot(t, p1, 'r', label='exact')
     plt.plot(t, p1_numeric, 'b', label='nnl_ode')
-    plt.plot(t, p1_odeint, 'g', label='odeint')
     plt.xlabel('time')
     plt.ylabel('p1')
     plt.legend()
