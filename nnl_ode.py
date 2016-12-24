@@ -39,7 +39,7 @@ class nnl_ode:
         self.y = y
         return self
 
-    def integrate(self, t_final, atol=0, rtol=1e-10):
+    def integrate(self, t_final, atol=1e-18, rtol=1e-10):
         """
         Adaptively integrate the system of equations assuming self.t and self.y set the initial value.
         :param t_final: (scalar) the final time to be reached.
@@ -114,8 +114,10 @@ class nnl_ode:
 
                 if np.allclose(dt, 0., rtol, atol):
                     # print waring if dt is very small
-                    print "Warning in nnl_ode: adaptive time-step became very small." \
-                          "The numerical result may not be trustworthy."
+                    print(
+                        "Warning in nnl_ode: adaptive time-step became very small." \
+                        "The numerical result may not be trustworthy."
+                    )
                     break
                 else:
                     # half the time-step
