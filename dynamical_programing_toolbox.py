@@ -1,16 +1,22 @@
+import numpy as np
+import networkx as nx
+from collections import namedtuple
+from operator import itemgetter
+
 __doc__ = """
 This is a prototype for merging the toolbox method of Prof. Herschel Rabitz and dynamical programing (Bellman).
 """
-import pydot
-import networkx as nx
-from collections import namedtuple
 
-class DyProgToolbox:
+
+class DyProToolbox:
     """
 
     """
     # data structure to save state
     CState = namedtuple('State', ['cost_func', 'node', 'field', 'state'])
+
+    get_cost_function = itemgetter('cost_func')
+    get_iteration = itemgetter('iteration')
 
     def __init__(self, init_state, init_field, propagator, field_switching, cost_func, cut_off):
 
@@ -22,10 +28,10 @@ class DyProgToolbox:
 
         # Initialize heaps for performing the optimization
         S = self.CState(
-                cost_func=self.cost_func(init_state),
-                node=0,
-                field=init_field,
-                state=init_state
+            cost_func=self.cost_func(init_state),
+            node=0,
+            field=init_field,
+            state=init_state
         )
         self.previous_heap = [S]
 
@@ -61,7 +67,7 @@ class DyProgToolbox:
                     state=new_state
                 )
 
-                self.landscape.add_node(new_S.node, cost_func=S.cost_func, iteration=self.current_iteration)
+                self.landscape.add_node(new_S.node, cost_func=new_S.cost_func, iteration=self.current_iteration)
                 self.landscape.add_edge(new_S.node, S.node, field=new_S.field)
 
                 current_heap.append(new_S)
@@ -77,7 +83,8 @@ class DyProgToolbox:
         :return:
         """
         return dict(
-            (node, (prop['iteration'], prop['cost_func'])) for node, prop in self.landscape.node.iteritems()
+            (node, (self.get_iteration(prop), self.get_cost_function(prop)))
+            for node, prop in self.landscape.node.iteritems()
         )
 
     def get_pos_cost_iteration(self):
@@ -86,7 +93,8 @@ class DyProgToolbox:
         :return:
         """
         return dict(
-            (node, (prop['cost_func'], prop['iteration'])) for node, prop in self.landscape.node.iteritems()
+            (node, (self.get_cost_function(prop), self.get_iteration(prop)))
+            for node, prop in self.landscape.node.iteritems()
         )
 
     def get_node_color(self):
@@ -94,33 +102,80 @@ class DyProgToolbox:
         Landscape plotting utility.
         :return:
         """
-        return [n['cost_func'] for n in self.landscape.node.values()]
+        return [self.get_cost_function(n) for n in self.landscape.node.values()]
+
+    def get_edge_color(self):
+        """
+        Landscape plotting utility.
+        :return:
+        """
+        return [d['field'] for _,_,d in self.landscape.edges(data=True) if 'field' in d]
 
     def get_optimal_policy(self):
         """
-
-        :return:
+        Find the optimal control policy to maximize the objective function
+        :return: max value of the cost function
+            and list of fields that take from the initial condition to the optimal solution
         """
-        # max_cost, best_node = max(
-        #     (prop['cost_func'], node) for node, prop in self.landscape.node.iteritems()
-        # )
-        # print max_cost
-        #
-        # opt_policy_nodes = [best_node]
-        # fields = []
-        #
-        # while True:
-        #     current_node = self.landscape[opt_policy_nodes[-1]]
-        #
-        #     if len(current_node) == 0:
-        #         break
-        #
-        #     current_node.pop()
-        #
-        #     opt_policy.append()
-        print max(
-             (prop['cost_func'], prop['iteration']) for node, prop in self.landscape.node.iteritems()
+        # Find the maximal node
+        max_cost, max_node = max(
+             (self.get_cost_function(prop), node) for node, prop in self.landscape.node.iteritems()
         )
+
+        # Initialize variables
+        opt_policy_fields = []
+        current_node = self.landscape[max_node]
+
+        # Walk from best node backwards to the initial condition
+        while current_node:
+
+            assert len(current_node) == 1, "Algorithm implemented incorrectly"
+
+            # Assertion above guarantees that there will be only one element
+            next_node, prop = current_node.items()[0]
+
+            # Add extracted value of the field
+            opt_policy_fields.append(prop['field'])
+
+            # Extract next node
+            current_node = self.landscape[next_node]
+
+        # reverse the order in the list
+        opt_policy_fields.reverse()
+
+        return max_cost, opt_policy_fields
+
+    def get_landscape_connectedness(self, **kwargs):
+        """
+        :param kwargs: the same as in https://docs.scipy.org/doc/numpy/reference/generated/numpy.histogram.html
+        :return: list of list. The outermost list is a list of levels. The innermost list contains the sizes of
+            each connected component.
+        """
+        costs, nodes = zip(
+            *sorted(
+                (self.get_cost_function(prop), node) for node, prop in self.landscape.node.iteritems()
+            )
+        )
+
+        costs = np.array(costs)
+
+        # create the histogram of cost function values
+        _, bin_edges = np.histogram(costs, **kwargs)
+
+        levels = (
+            nodes[indx:] for indx in np.searchsorted(costs, bin_edges[1:-1])
+        )
+
+        # make an undirected shallow copy of self.landscape
+        landscape = nx.Graph(self.landscape)
+
+        return [
+            sorted(
+                (len(c) for c in nx.connected_components(landscape.subgraph(nbunch))),
+                reverse=True
+            )
+            for nbunch in levels
+        ]
 
 ###################################################################################################
 #
@@ -131,7 +186,6 @@ class DyProgToolbox:
 if __name__=='__main__':
 
     import matplotlib.pyplot as plt
-    import numpy as np
 
     np.random.seed(1839127)
 
@@ -211,27 +265,60 @@ if __name__=='__main__':
 
     ###############################################################################################
     #
-    #
+    #   Run the optimization
     #
     ###############################################################################################
 
     init_state = np.zeros(N)
     init_state[0] = 1.
 
-    opt = DyProgToolbox(
-            init_state,
-            field.min(),
-            CPropagator(),
-            field_switching,
-            CCostFunc(),
-            2000
+    opt = DyProToolbox(
+        init_state,
+        field[field.size / 2],
+        CPropagator(),
+        field_switching,
+        CCostFunc(),
+        2000
     )
 
     for _ in xrange(11):
        opt.next_time_step()
 
-    opt.get_optimal_policy()
-    # nx.drawing.nx_pydot.to_pydot(opt.landscape).write_png('test.png')
+    ###############################################################################################
+    #
+    #   Plot results
+    #
+    ###############################################################################################
 
-    nx.draw(opt.landscape, pos=opt.get_pos_iteration_cost(), node_color=opt.get_node_color())
+    plt.title("Landscape")
+    plt.xlabel("time variable (dt)")
+    plt.ylabel("Value of objective function")
+    nx.draw(
+        opt.landscape,
+        pos=opt.get_pos_iteration_cost(),
+        node_color=opt.get_node_color(),
+        edge_color=opt.get_edge_color(),
+        arrows=False,
+        alpha=0.6,
+        node_shape='s',
+        linewidths=0,
+    )
+    plt.axis('on')
+    plt.show()
+
+    # Display the connectedness analysis
+    connect_info = opt.get_landscape_connectedness()
+
+    plt.subplot(121)
+    plt.title("Number of disconnected pieces")
+    plt.semilogy([len(_) for _ in connect_info], '*-')
+    plt.ylabel('Number of disconnected pieces')
+    plt.xlabel('Level set number')
+
+    plt.subplot(122)
+    plt.title("Size of largest connected piece")
+    plt.semilogy([max(_) for _ in connect_info], '*-')
+    plt.ylabel("Size of largest connected piece")
+    plt.xlabel('Level set number')
+
     plt.show()
