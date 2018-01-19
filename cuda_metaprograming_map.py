@@ -13,10 +13,6 @@ class CFuncEval:
     Evaluation of a complicated function using metaprogramming in PyCUDA
     """
     def __init__(self, **kwargs):
-        """
-
-        :param kwargs:
-        """
 
         # save all attributes
         for name, value in kwargs.items():
@@ -112,11 +108,27 @@ class CFuncEval:
             tuple(np.array(pycuda.driver.mem_get_info()) / 2. ** 30)
         )
 
-    def test(self):
+    def test_gpu(self):
         # calculate f on GPU
+        import time
+        t = time.time()
         self.get_f(self.result, **self.cuda_block_grid)
         f_gpu = self.result.get()
-        print(f_gpu)
+        print("Running time: {:.2}".format(time.time() - t))
+        return f_gpu
+
+    def test_cpu(self):
+        # calculate f on CPU
+        import itertools
+
+        g = lambda X, Y, Z: np.exp(1j * X) * np.sin(Y) * np.cos(Z)
+        G = lambda X, Y, Z: sum(g(*_) for _ in itertools.permutations((X, Y, Z)))
+
+        return sum(
+            G(X, Y, Z) for X in np.arange(self.X_min, self.X_max, self.dX)
+                for Y in np.arange(self.Y_min, self.Y_max, self.dY)
+                for Z in np.arange(self.Z_min, self.Z_max, self.dZ)
+        )
 
     cuda_template = Template("""    
     #include<pycuda-complex.hpp>
@@ -151,32 +163,11 @@ class CFuncEval:
     __global__ void F(cuda_complex *out)
     {
         cuda_complex result = 0.;
-        cuda_real X, Y, Z;
-        
-        //////////////////////// reset Z ////////////////////////
-        Z = Z_min - dZ;
-        /////////////////////////////////////////////////////////
 
-        %for nz in range(Z_num):
-        Z += dZ;
-        
-        //////////////////////// reset Y ////////////////////////
-        Y = Y_min - dY;
-        /////////////////////////////////////////////////////////
-        
-        %for ny in range(Y_num):
-        
-        Y += dY;
-        
-        //////////////////////// reset X ////////////////////////
-        X = X_min - dX;
-        /////////////////////////////////////////////////////////
-        
-        %for nx in range(X_num):
-        X += dX; result += G(X, Y, Z);
-        %endfor
-        %endfor
-        %endfor
+        for(cuda_real Z = Z_min; Z < Z_max; Z += dZ)
+            for(cuda_real Y = Y_min; Y < Y_max; Y += dY) 
+                for(cuda_real X = X_min; X < X_max; X += dX)
+                    result += G(X, Y, Z);
         
         // saving the results into the array       
         const int indx = threadIdx.x + blockDim.x * blockIdx.x;
@@ -191,18 +182,21 @@ class CFuncEval:
 ##########################################################################################
 
 if __name__=='__main__':
-    CFuncEval(
+
+    obj = CFuncEval(
         grid_size=10,
 
-        X_num=100,
-        dX=0.01,
+        dX=1.,
         X_min=-10.,
+        X_max=5,
 
-        Y_num=100,
-        dY = 0.02,
-        Y_min=-20.,
+        dY=1.,
+        Y_min=-10,
+        Y_max=100,
 
-        Z_num=100,
-        dZ=0.03,
-        Z_min=-13.,
-    ).test()
+        dZ=1.,
+        Z_min=-100.,
+        Z_max=100,
+    )
+
+    assert np.allclose(obj.test_gpu() - obj.test_cpu(), 0.)
