@@ -1,13 +1,18 @@
 cimport cython
 from libc.math cimport exp, sin, pow
 
-# @cython.boundscheck(False)
-# @cython.weaparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.nonecheck(False)
 cpdef eval(double[:] out, int x_num, double x_min, double x_max, double h_min, double h_max):
     """
     Evaluate
     """
+    # specify the type of variables for optimization
     cdef double h, result, X, Y, Z
+
+    # specify the type of indices for optimization
+    cdef size_t h_i, x_i, y_i, z_i
 
     for h_i in range(out.shape[0]):
         # find current h
@@ -28,6 +33,6 @@ cpdef eval(double[:] out, int x_num, double x_min, double x_max, double h_min, d
                 for z_i in range(x_num):
                     Z = x_min + (x_max - x_min) * z_i / (x_num - 1)
 
-                    result += exp(-pow(X - h, 2)) * (sin(Y + h) + pow(Z + h, 2))
+                    result += exp(-pow(2. * Z + X + pow(Y, 2) - h, 2)) * (sin(X + Y + 3. * Z + h) + pow(Y + Z + h, 2))
 
         out[h_i] = result
