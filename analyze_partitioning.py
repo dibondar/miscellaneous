@@ -13,9 +13,9 @@ def find_partitions(x):
     """
     Get the list of all possible partitions
     :param x: numpy.array of positive integers
-    :return: the list of partitions
+    :return: the set of partitions
     """
-    partitions = []
+    partitions = set()
 
     S = x.sum()
 
@@ -30,12 +30,11 @@ def find_partitions(x):
         s2 = S - s1
 
         if s1 == s2:
-            # a partitioning was found
-            partitions.append(mask)
+            # a partitioning was found that
 
-    # simple check
-    assert len(partitions) % 2 == 0, "we should have discovered even number of partitions since " \
-                                     "if (S1, S2) is a partition, then so is (S2, S1)."
+            # take care of the fact that if (S1, S2) is a partition, then so is (S2, S1)
+            if tuple(~mask) not in partitions:
+                partitions.add(tuple(mask))
 
     return partitions
 
@@ -98,3 +97,22 @@ with open("partitions.csv", 'tw') as f:
     for num, x in results:
         f.write("{}, {}\n".format(x, num))
         # print("The set {} has {} partitions".format(x, num))
+
+########################################################################################################################
+#
+#   Testing particular partitions
+#
+########################################################################################################################
+
+# #x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 11])
+# x = np.array([ 1,  2,  3, 13, 14, 15, 16, 17, 18, 19])
+#
+# r = set(
+#     (tuple(x[mask]), tuple(x[~mask])) for mask in np.array(list(find_partitions(x)))
+# )
+#
+# # simple check
+# assert all(sum(s1) == sum(s2) for s1, s2 in r), "wow! Incorect partitioning."
+#
+#
+# print("Set of partitions for {}\n\n{}".format(x, r))
