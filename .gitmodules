@@ -1,0 +1,3 @@
+[submodule "QuantumClassicalDynamics"]
+	path = QuantumClassicalDynamics
+	url = https://github.com/dibondar/QuantumClassicalDynamics
