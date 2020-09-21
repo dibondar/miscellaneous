@@ -8,7 +8,7 @@ x = np.linspace(-1, 1, 10)
 y = x ** 2
 ```
 Then, follow the following steps
-1. In Python, use the function
+1. In Python, using the function
 ```python
 import numpy as np
 import pyperclip
@@ -71,7 +71,7 @@ def get_vba_code2plot(x: np.ndarray, y: np.ndarray, ppoint_slide_width=1280, ppo
     # copy the generated code to clipboard (optional)
     pyperclip.copy(code)
 ``` 
-and run
+run
 ```python
 get_vba_code2plot(x, y)
 ```
@@ -80,6 +80,6 @@ If the execution was successful, no message should appear. At this point the cli
 2. Open a PowerPoint presentation and go to menu `Tools\Macro\Visual Basic Editor`
 3. In the newly open widow of Visual Basic Editor, right hand click on `VBAProject` and select `Insert\Module`
 4. Paste the content of the clipboard (e.g., `Ctrl + V`) to the opened tex editor
-5. Execute the macros. Note that you may be asked to grant an access to the temporary file specified in the argument `temp_file` of python function `get_vba_code2plot` (the default file name is `data.csv`). Also PowerPoint may throw an error if you want to plot to many points; in such a case, in step 3 above, call `get_vba_code2plot(x[::2], y[::2])` to slice your arrays.  
+5. Execute the macros. Note that you may be asked to grant an access to the temporary file specified in the argument `temp_file` of python function `get_vba_code2plot` (the default file name is `data.csv`). Also PowerPoint may throw an error if you want to plot too many points; in such a case, in step 3 above, call `get_vba_code2plot(x[::2], y[::2])` to slice your arrays.  
 
 vualá  
